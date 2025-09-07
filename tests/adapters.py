@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-
+import time
 
 def run_linear(
     d_in: int,
@@ -589,4 +589,131 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
+    import regex as re
+    print('input_path',input_path)
+    print('vocab_size',vocab_size)
+    print('special_tokens',special_tokens)
+    
+    # Init Dict & merges
+    vocab = {}
+    for i in range(len(special_tokens)):
+        vocab[i] = (special_tokens[i]).encode('utf-8')
+    offset = len(vocab)
+    for i in range(256):
+        vocab[i + offset] = bytes([i])
+    merges = []
+    
+    # pre-tokenizing
+    with open(input_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    escaped_tokens = [re.escape(token) for token in special_tokens]
+    spctk = "|".join(escaped_tokens)
+    chunks = re.split(spctk, text)
+    PAT = (r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+    words_inChunks = []
+    for chunk in chunks:
+        if chunk in special_tokens:
+            continue
+        else:
+            words_inChunk = re.findall(PAT, chunk)
+            words_inChunks += words_inChunk
+    start_time = time.time()        
+    # count word times
+    token_freq = {}
+    for word in words_inChunks:
+        word_bytes = word.encode('utf-8')
+        word_en = tuple(bytes([b]) for b in word_bytes) # Here!!! Not all elements is a single byte!!!
+        # '你'.encode('utf-8') -> b'\xe4\xbd\xa0'
+        # '好'.encode('utf-8') -> b'\xe5\xa5\xbd'
+        # 最终 word_en 变成 (b'\xe4\xbd\xa0', b'\xe5\xa5\xbd')
+        # Need: (b'\xe4', b'\xbd', b'\xa0', b'\xe5', b'\xa5', b'\xbd')
+        if word_en not in token_freq:
+            token_freq[word_en] = 1
+        else:
+            token_freq[word_en] += 1   
+
+    # word time to pair time
+    def count_word2pair(words: dict) -> dict:
+        count_pair = {}
+        for word, freq in words.items():
+            if len(word) < 2:
+                continue
+            else:
+                for i in range(len(word)-1):
+                    pair = (word[i], word[i+1])
+                    if pair not in count_pair:
+                        count_pair[pair] = freq
+                    else:
+                        count_pair[pair] += freq
+            # 【AI generated】:
+            # for i in range(len(word) - 1):
+            #     pair = (word[i], word[i+1])
+            #     count_pair[pair] = count_pair.get(pair, 0) + freq
+        return count_pair
+    
+    def merge_and_update(ori_word, b_1st, b_2nd) -> tuple:
+            merged_list = []
+            b_merged = b_1st + b_2nd
+            i = 0
+            while i < len(ori_word):
+                if i < len(ori_word) - 1 and ori_word[i] == b_1st and ori_word[i+1] == b_2nd:
+                    merged_list.append(b_merged)
+                    i += 2
+                else:
+                    merged_list.append(ori_word[i])
+                    i += 1
+            return tuple(merged_list)
+        
+    def update_count(pair_freq: dict, token_freq: dict, b_1st: bytes, b_2nd: bytes):
+        new_token = b_1st + b_2nd
+        merge_pair = (b_1st, b_2nd)
+        pair_freq.pop(merge_pair, None)
+        for word, freq in list(token_freq.items()):
+            if merge_pair not in zip(word, word[1:]):
+                continue
+            del token_freq[word]
+            indices = [i for i, _ in enumerate(word[:-1]) if word[i:i+2] == merge_pair]
+            for i in indices:
+                if i > 0:
+                    pair = (word[i-1], b_1st)
+                    pair_freq[pair] = pair_freq.get(pair, 0) - freq
+                if i < len(word) - 2:
+                    pair = (b_2nd, word[i+2])
+                    pair_freq[pair] = pair_freq.get(pair, 0) - freq
+                    
+                if i > 0:
+                    pair = (word[i-1], new_token)
+                    pair_freq[pair] = pair_freq.get(pair, 0) + freq
+                if i < len(word) - 2:
+                    pair = (new_token, word[i+2])
+                    pair_freq[pair] = pair_freq.get(pair, 0) + freq
+            new_word = merge_and_update(word, b_1st, b_2nd)
+            token_freq[new_word] = token_freq.get(new_word, 0) + freq
+
+        # 清理 count_pair 中计数 <= 0 的项
+        for pair in list(pair_freq.keys()):
+            if pair_freq[pair] <= 0:
+                del pair_freq[pair]
+    
+    # find max count pair
+    
+    pair_freq = count_word2pair(token_freq)
+    print(f"Pre-tokenization took: {time.time() - start_time:.2f} seconds")
+
+    start_time = time.time()
+    while len(vocab) < vocab_size:
+        if not pair_freq: # 如果没有更多的 pair 可以合并，就提前退出
+            break      
+        ready2merge_pair = max(pair_freq.items(), key=lambda item: (item[1], item[0]))[0]   
+        # merge max count pair and update count_pair
+        b_1st = ready2merge_pair[0]
+        b_2nd = ready2merge_pair[1]
+        merges.append((b_1st, b_2nd))    
+        vocab[len(vocab)] = b_1st + b_2nd
+        update_count(pair_freq, token_freq, b_1st, b_2nd)
+        
+    print(f"BPE merge loop took: {time.time() - start_time:.2f} seconds")
+
+    return vocab, merges
+
     raise NotImplementedError
