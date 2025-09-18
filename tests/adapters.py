@@ -559,6 +559,11 @@ def get_tokenizer(
     Returns:
         A BPE tokenizer that uses the provided vocab, merges, and special tokens.
     """
+    
+    from cs336_basics.tokenizer import Tokenizer
+    
+    return Tokenizer(vocab, merges, special_tokens)
+
     raise NotImplementedError
 
 
@@ -590,9 +595,9 @@ def run_train_bpe(
                 Merges are ordered by order of creation.
     """
     import regex as re
-    print('input_path',input_path)
-    print('vocab_size',vocab_size)
-    print('special_tokens',special_tokens)
+    # print('input_path',input_path)
+    # print('vocab_size',vocab_size)
+    # print('special_tokens',special_tokens)
     
     # Init Dict & merges
     vocab = {}
@@ -699,7 +704,6 @@ def run_train_bpe(
     
     pair_freq = count_word2pair(token_freq)
     print(f"Pre-tokenization took: {time.time() - start_time:.2f} seconds")
-
     start_time = time.time()
     while len(vocab) < vocab_size:
         if not pair_freq: # 如果没有更多的 pair 可以合并，就提前退出
