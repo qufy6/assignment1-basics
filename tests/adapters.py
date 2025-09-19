@@ -99,6 +99,14 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
+    from cs336_basics.modules import SwiGLU 
+    swiglu = SwiGLU(d_model, d_ff)
+    swiglu.w1.weight.data = w1_weight.T
+    swiglu.w2.weight.data = w2_weight.T
+    swiglu.w3.weight.data = w3_weight.T
+    return swiglu(in_features)
+
+
     raise NotImplementedError
 
 
