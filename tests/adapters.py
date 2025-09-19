@@ -10,6 +10,9 @@ from jaxtyping import Bool, Float, Int
 from torch import Tensor
 import time
 
+import torch.nn as nn 
+
+
 def run_linear(
     d_in: int,
     d_out: int,
@@ -28,6 +31,13 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
+    
+    from cs336_basics.modules import Linear 
+    
+    Input = Linear(d_in, d_out)
+    Input.weight.data.copy_(weights.T)  # forward is ... d_in, d_in d_out -> ... d_out
+    
+    return Input(in_features)  
 
     raise NotImplementedError
 
@@ -50,6 +60,12 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
+    from cs336_basics.modules import Embedding 
+    embedding = Embedding(vocab_size, d_model)
+    embedding.weight.data.copy_(weights)
+    
+    return embedding(token_ids)
+
 
     raise NotImplementedError
 
