@@ -1,5 +1,6 @@
 import torch 
 import torch.nn as nn 
+import numpy.typing as npt
 import einops
 from einops import einsum
 from collections.abc import Callable, Iterable
@@ -298,3 +299,35 @@ def lr_cosine_schedule(it: int,
     if it > cosine_cycle_iters:
         return min_learning_rate
     return min_learning_rate + 0.5 * (1 + math.cos(math.pi * (it - warmup_iters)/(cosine_cycle_iters - warmup_iters))) * (max_learning_rate - min_learning_rate)
+
+def gradient_clipping(parameters, max_l2_norm):
+    grads = [p.grad for p in parameters if p.grad is not None]
+    norm = 0.0
+
+    for g in grads:
+        norm += (g**2).sum()
+
+    norm = torch.sqrt(norm)
+    clip_coef = min(1, max_l2_norm / (norm + 1e-6))
+    for g in grads:
+        g *= clip_coef
+
+def get_batch (dataset: npt.NDArray, batch_size: int, context_length: int, device: torch.device | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    # Randomly selection batch
+    dataset_length = len(dataset)
+    inputs = torch.zeros((batch_size, context_length), dtype=torch.long)
+    targets = torch.zeros((batch_size, context_length), dtype=torch.long)
+
+    for i in range(batch_size):
+        start_index = torch.randint(0, dataset_length - context_length, (1,)).item()
+        input_seq = dataset[start_index : start_index + context_length]
+        target_seq = dataset[start_index + 1 : start_index + context_length + 1]
+        inputs[i] = torch.tensor(input_seq, dtype=torch.long)
+        targets[i] = torch.tensor(target_seq, dtype=torch.long)
+
+    if device:
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+        # print('***DEBUG*** -- dataset on device:',device)
+        
+    return inputs, targets

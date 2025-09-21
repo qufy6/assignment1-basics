@@ -553,6 +553,9 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
+    from cs336_basics.modules import get_batch
+    return get_batch(dataset, batch_size, context_length, device)
+
     raise NotImplementedError
 
 
@@ -606,6 +609,8 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
+    from cs336_basics.modules import gradient_clipping
+    return gradient_clipping(parameters, max_l2_norm)
     raise NotImplementedError
 
 
