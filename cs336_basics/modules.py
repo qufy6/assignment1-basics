@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn 
 import einops
 from einops import einsum
+from collections.abc import Callable, Iterable
+from typing import Optional
 
 class Linear(nn.Module):
     def __init__(
@@ -241,3 +243,45 @@ class TransformerLM(nn.Module):
         x = self.output_embeddings(x)
 
         return x
+
+def cross_entropy(inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    target_logits = inputs.gather(dim=-1, index=targets.unsqueeze(-1))
+    logsumexp = torch.logsumexp(inputs, -1, keepdim=True)
+    loss_matrix = -target_logits + logsumexp
+    loss = torch.mean(loss_matrix)
+    return loss
+
+class AdamW(torch.optim.Optimizer):
+    def __init__(self, params, lr=1e-3, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-8, weight_decay: float = 0.01,):
+        defaults = dict(lr=lr, betas=betas, eps=eps, lmd=weight_decay)
+        super().__init__(params, defaults)
+
+    def step(self, closure: Optional[Callable] = None):
+        loss = None if closure is None else closure()
+        for group in self.param_groups:
+            lr = group["lr"] 
+            beta1, beta2 = group["betas"] 
+            eps = group["eps"] 
+            lmd = group["lmd"] 
+
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+
+                state = self.state[p]  
+                t = state.get("t", 1)   
+                g = p.grad.data 
+                m = state.get("m", torch.zeros_like(g))
+                v = state.get("v", torch.zeros_like(g))
+                m = beta1 * m + (1 - beta1) * g
+                v = beta2 * v + (1 - beta2) * g ** 2
+                lr = lr * (1 - beta2 ** t) ** 0.5 / (1 - beta1 ** t)
+
+                p.data -= lr * m / (v**0.5 + eps)
+                p.data -= group["lr"] * lmd * p.data
+
+                state["m"] = m
+                state["v"] = v
+                state["t"] = t + 1  
+
+        return loss
