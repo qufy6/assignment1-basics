@@ -174,3 +174,29 @@ class MultiHeadAttention(nn.Module):
         output = self.W_O(concat_all_heads_scores)
         return output
 
+class TransformerBlock(nn.Module):
+    def __init__(self,
+                 d_model: int,
+                 num_heads: int,
+                 d_ff: int,
+                 use_rope: bool = False,
+                 max_seq_len: int = 512,
+                 theta: float = 10000.0,
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+        self.use_rope = use_rope
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+
+        self.norm1 = RMSNorm(d_model)
+        self.norm2 = RMSNorm(d_model)
+        self.mha = MultiHeadAttention(d_model, num_heads, use_rope, max_seq_len, theta)
+        self.ffn = SwiGLU(d_model, d_ff)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        step1 = x + self.mha(self.norm1(x))
+        step2 = step1 + self.ffn(self.norm2(step1))
+        return step2
