@@ -125,4 +125,52 @@ def scaled_dot_product_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tens
 
     return torch.matmul(Softmax(qk), v)
         
-   
+class MultiHeadAttention(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        use_rope: bool = False,
+        max_seq_len: int | None = None,
+        theta: float | None = None,
+        token_positions: torch.Tensor | None = None,
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.head_dim = d_model // num_heads
+
+        self.use_rope = use_rope
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+        self.token_positions = token_positions
+        
+        if use_rope:
+            self.rope = RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len)
+
+        self.W_Q = Linear(d_model, d_model)
+        self.W_K = Linear(d_model, d_model)
+        self.W_V = Linear(d_model, d_model)
+        self.W_O = Linear(d_model, d_model)
+
+    def _causal_mask(self, seq_len: int) -> torch.Tensor:
+        mask = torch.tril(torch.ones(seq_len, seq_len)).bool()
+        mask =  mask.unsqueeze(0).unsqueeze(0)
+        return mask
+    
+    def forward(self, in_features: torch.Tensor): # in_features: (Batch_size, Seq_len, D_model)
+        Batch_size, Seq_len, D_model = in_features.size()
+        W_Q = self.W_Q(in_features).view(Batch_size, Seq_len, self.num_heads, self.head_dim).transpose(1,2)
+        W_K = self.W_K(in_features).view(Batch_size, Seq_len, self.num_heads, self.head_dim).transpose(1,2)
+        W_V = self.W_V(in_features).view(Batch_size, Seq_len, self.num_heads, self.head_dim).transpose(1,2)
+        
+        if self.use_rope:
+            W_Q = self.rope(W_Q, self.token_positions)
+            W_K = self.rope(W_K, self.token_positions)
+
+        mask = self._causal_mask(Seq_len).to(W_Q.device)
+
+        concat_all_heads_scores = scaled_dot_product_attention(W_Q, W_K, W_V, mask).transpose(1,2).contiguous().view(Batch_size, Seq_len, D_model)
+        output = self.W_O(concat_all_heads_scores)
+        return output
+
