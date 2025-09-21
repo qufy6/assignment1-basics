@@ -43,8 +43,7 @@ class Embedding(nn.Module):
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         return self.weight[token_ids]
-    
-        
+            
 class RMSNorm(nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
         super().__init__()
@@ -111,7 +110,19 @@ class RotaryPositionalEmbedding(nn.Module):
 
         return x
 
+def Softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    x = x - torch.max(x, dim=dim, keepdim=True).values
+    #  subtract the largest entry of o_i from all elements of o_i, making the new largest entry 0
+    x = torch.exp(x)
+    x = x / torch.sum(x, dim=dim, keepdim=True)
+    return x
 
+def scaled_dot_product_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
+    d_k = k.size(-1)
+    qk = torch.matmul(q, k.transpose(-2, -1)) / (d_k ** 0.5)
+    if mask is not None:
+        qk = qk.masked_fill(mask == 0, float('-inf'))
 
+    return torch.matmul(Softmax(qk), v)
         
-    
+   
