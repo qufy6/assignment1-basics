@@ -200,3 +200,44 @@ class TransformerBlock(nn.Module):
         step1 = x + self.mha(self.norm1(x))
         step2 = step1 + self.ffn(self.norm2(step1))
         return step2
+    
+class TransformerLM(nn.Module):
+    def __init__(self,
+                 vocab_size: int,
+                 context_length: int,
+                 d_model: int,
+                 num_layers: int,
+                 num_heads: int,
+                 d_ff: int,
+                 use_rope: bool = False,
+                 max_seq_len: int = 512,
+                 theta: float = 10000.0,
+    ):
+        super().__init__()
+
+        self.token_embedding = Embedding(num_embedding = vocab_size, 
+                                         embedding_dim = d_model)
+        self.layers = nn.ModuleList(
+            [
+                TransformerBlock(
+                    d_model=d_model,
+                    num_heads=num_heads,
+                    d_ff=d_ff,
+                    use_rope=True,
+                    max_seq_len=context_length,
+                    theta=theta,
+                )
+                for _ in range(num_layers)
+            ]
+        )
+        self.norm = RMSNorm(d_model=d_model)
+        self.output_embeddings = Linear(in_features=d_model, out_features=vocab_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.token_embedding(x)
+        for layer in self.layers:
+            x = layer(x)
+        x = self.norm(x)
+        x = self.output_embeddings(x)
+
+        return x

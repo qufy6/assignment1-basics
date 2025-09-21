@@ -435,6 +435,54 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
+    from cs336_basics.modules import TransformerLM
+
+    LM = TransformerLM(vocab_size = vocab_size,
+                       context_length = context_length,
+                       d_model = d_model,
+                       num_layers = num_layers,
+                       num_heads = num_heads,
+                       d_ff = d_ff,
+                       theta = rope_theta,)
+    
+    LM.token_embedding.weight.data.copy_(weights["token_embeddings.weight"])
+    
+    for layer_idx in range(num_layers):
+        LM.layers[layer_idx].mha.W_Q.weight.data.copy_(
+            weights[f"layers.{layer_idx}.attn.q_proj.weight"].T
+        )
+        LM.layers[layer_idx].mha.W_K.weight.data.copy_(
+            weights[f"layers.{layer_idx}.attn.k_proj.weight"].T
+        )
+        LM.layers[layer_idx].mha.W_V.weight.data.copy_(
+            weights[f"layers.{layer_idx}.attn.v_proj.weight"].T
+        )
+        LM.layers[layer_idx].mha.W_O.weight.data.copy_(
+            weights[f"layers.{layer_idx}.attn.output_proj.weight"].T
+        )
+
+        LM.layers[layer_idx].ffn.w1.weight.data.copy_(
+            weights[f"layers.{layer_idx}.ffn.w1.weight"].T
+        )
+        LM.layers[layer_idx].ffn.w2.weight.data.copy_(
+            weights[f"layers.{layer_idx}.ffn.w2.weight"].T
+        )
+        LM.layers[layer_idx].ffn.w3.weight.data.copy_(
+            weights[f"layers.{layer_idx}.ffn.w3.weight"].T
+        )
+
+        LM.layers[layer_idx].norm1.g.data.copy_(
+            weights[f"layers.{layer_idx}.ln1.weight"]
+        )
+        LM.layers[layer_idx].norm2.g.data.copy_(
+            weights[f"layers.{layer_idx}.ln2.weight"]
+        )
+
+    LM.norm.g.data.copy_(weights["ln_final.weight"])
+    LM.output_embeddings.weight.data.copy_(weights["lm_head.weight"].T)
+
+    return LM(in_indices)
+    
     raise NotImplementedError
 
 
@@ -543,6 +591,8 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
+    from cs336_basics.modules import cross_entropy
+
     raise NotImplementedError
 
 
